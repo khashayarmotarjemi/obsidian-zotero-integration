@@ -80,6 +80,7 @@ export interface ZoteroConnectorSettings {
   exeOverridePath?: string;
   exportFormats: ExportFormat[];
   noteImportFolder: string;
+  autoImport : boolean;
   openNoteAfterImport: boolean;
   pdfExportImageDPI?: number;
   pdfExportImageFormat?: string;

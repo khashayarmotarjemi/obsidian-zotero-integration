@@ -4,6 +4,7 @@ import { shellPath } from 'shell-path';
 
 import { DataExplorerView, viewType } from './DataExplorerView';
 import { LoadingModal } from './bbt/LoadingModal';
+import { CiteKey, getCiteKeyFromAny } from './bbt/cayw';
 import { getCAYW } from './bbt/cayw';
 import { exportToMarkdown, renderCiteTemplate } from './bbt/export';
 import {
@@ -38,6 +39,7 @@ const DEFAULT_SETTINGS: ZoteroConnectorSettings = {
   exportFormats: [],
   citeSuggestTemplate: '[[{{citekey}}]]',
   openNoteAfterImport: false,
+  autoImport: true,
   whichNotesToOpenAfterImport: 'first-imported-note',
 };
 
@@ -66,6 +68,7 @@ export default class ZoteroConnector extends Plugin {
   settings: ZoteroConnectorSettings;
   emitter: Events;
   fuse: Fuse<CiteKeyExport>;
+  ws: WebSocket;
 
   async onload() {
     await this.loadSettings();
@@ -79,13 +82,18 @@ export default class ZoteroConnector extends Plugin {
       this.addFormatCommand(f);
     });
 
+    console.log('the formats are:');
     this.settings.exportFormats.forEach((f) => {
       this.addExportCommand(f);
     });
 
+    if (this.settings.autoImport) {
+      this.listenToCiteUpdate();
+    }
+
     this.addCommand({
       id: 'zdc-insert-notes',
-      name: 'Insert notes into current document',
+      name: "Insert notes into current document",
       editorCallback: (editor) => {
         const database = {
           database: this.settings.database,
@@ -129,6 +137,12 @@ export default class ZoteroConnector extends Plugin {
       },
     });
 
+    this.addCommand({
+      id: 'my-test-command',
+      name: 'This a test command',
+      callback: () => {},
+    });
+
     this.registerEvent(
       this.app.vault.on('modify', (file) => {
         if (file instanceof TFile) {
@@ -152,6 +166,76 @@ export default class ZoteroConnector extends Plugin {
     });
 
     this.app.workspace.detachLeavesOfType(viewType);
+  }
+
+  listenToCiteUpdate() {
+    console.log('auto import running');
+
+    this.ws = new WebSocket('ws://localhost:5555'); // Match this with Obsidian's listening server
+
+    this.ws.addEventListener('open', (event) => {
+      console.log('WebSocket connection established:', event);
+      // You can send a message if needed
+      this.ws.send('Hello Server!');
+    });
+
+    // Event listener for receiving messages
+    this.ws.addEventListener('message', async (event) => {
+      // console.log('ff22 Message from server:', event.data['data']);
+
+      const database = {
+        database: this.settings.database,
+        port: this.settings.port,
+      };
+      let citeKey: CiteKey;
+      if (event.data != undefined) {
+        const parsed_data = JSON.parse(event.data);
+
+        console.log(`ff22 event.data: ${JSON.stringify(parsed_data['data'])}`);
+        citeKey = getCiteKeyFromAny(parsed_data['data']);
+      }
+      console.log(`citeKey ${JSON.stringify(citeKey)}`);
+      // console.log('ff22 Cite key info:', citeKey);
+
+      this.openNotes(
+        await exportToMarkdown(
+          {
+            settings: this.settings,
+            database,
+            exportFormat: this.settings.exportFormats[0],
+          },
+          [citeKey]
+        )
+      );
+      // Run your code here in response to the message
+    });
+
+    // Event listener for errors
+    this.ws.addEventListener('error', (event) => {
+      console.error('WebSocket error:', event);
+    });
+
+    // Event listener for when the connection is closed
+    this.ws.addEventListener('close', (event) => {
+      console.log('WebSocket connection closed:', event);
+      // Optionally, you can try to reconnect here
+    });
+
+    // this.ws.onopen = () => {
+    //   console.log("WebSocket connection established.");
+    // };
+    //
+    // this.ws.onmessage = (event) => {
+    //   const data = JSON.parse(event.data);
+    //   if (data.type === 'new-citation') {
+    //     console.log('got new message')
+    //   }
+    // };
+    //
+    // this.ws.onclose = () => {
+    //   console.log("WebSocket connection closed. Attempting to reconnect...");
+    //   setTimeout(() => this.listenToCiteUpdate(), 5000);
+    // };
   }
 
   addFormatCommand(format: CitationFormat) {
@@ -194,6 +278,7 @@ export default class ZoteroConnector extends Plugin {
       id: `${exportCommandIDPrefix}${format.name}`,
       name: format.name,
       callback: async () => {
+        console.log('me');
         const database = {
           database: this.settings.database,
           port: this.settings.port,

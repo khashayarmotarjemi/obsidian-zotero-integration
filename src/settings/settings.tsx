@@ -47,6 +47,10 @@ function SettingsComponent({
     !!settings.openNoteAfterImport
   );
 
+  const [autoImportState, setAutoImport] = React.useState(
+    !!settings.autoImport
+  );
+
   const [ocrState, setOCRState] = React.useState(settings.pdfExportImageOCR);
 
   const [concat, setConcat] = React.useState(!!settings.shouldConcat);
@@ -170,6 +174,22 @@ function SettingsComponent({
           spellCheck={false}
           placeholder="Example: folder 1/folder 2"
           defaultValue={settings.noteImportFolder}
+        />
+      </SettingItem>
+      <SettingItem
+        name="Auto import notes when a new citation is added to Zotero"
+        description="you know"
+      >
+        <div
+          onClick={() => {
+            setAutoImport((state) => {
+              updateSetting('autoImport', !state);
+              return !state;
+            });
+          }}
+          className={`checkbox-container${
+            autoImportState ? ' is-enabled' : ''
+          }`}
         />
       </SettingItem>
       <SettingItem
